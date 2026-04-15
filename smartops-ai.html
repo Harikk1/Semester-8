@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SmartOps AI – Enterprise AIOps Platform for Autonomous Incident Resolution.">
+    <title>SmartOps AI | Autonomous Command Center</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    
+    <style>
+        /* ─── DESIGN SYSTEM ─────────────────────────────────────────────────── */
+        :root {
+            --glass-bg: rgba(18, 18, 23, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-blur: blur(14px);
+            
+            --bg-deep: #08080a;
+            --sidebar-w: 72px;
+            
+            --accent-primary: #007AFF; /* Electric Blue */
+            --accent-secondary: #00F3FF; /* Neon Cyan */
+            --accent-emerald: #00FFAB; /* Vibrant Emerald */
+            --accent-amber: #FFB300;   /* Warning Amber */
+            --accent-crimson: #FF2D55; /* Critical Crimson */
+            --accent-obsidian: #121217;
+            
+            --text-main: #FFFFFF;
+            --text-dim: #8E8E93;
+            --text-muted: #48484A;
+            
+            --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            
+            --shadow-glow: 0 0 20px rgba(0, 122, 255, 0.15);
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+        }
+
+        /* ─── SCROLLBAR ─────────────────────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* ─── RESET ─────────────────────────────────────────────────────────── */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: var(--bg-deep);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(0, 122, 255, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(0, 255, 171, 0.03) 0px, transparent 50%);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ─── SIDEBAR ───────────────────────────────────────────────────────── */
+        aside#sidebar {
+            width: var(--sidebar-w);
+            background: rgba(10, 10, 12, 0.8);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 0;
+            z-index: 100;
+        }
+        .nav-logo {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 16px; color: #000;
+            margin-bottom: 40px;
+            box-shadow: 0 0 15px rgba(0, 122, 255, 0.4);
+        }
+        .nav-item {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-dim);
+            text-decoration: none;
+            margin-bottom: 12px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+        }
+        .nav-item svg { width: 20px; height: 20px; fill: currentColor; }
+        .nav-item:hover { color: var(--text-main); background: rgba(255,255,255,0.05); }
+        .nav-item.active { color: var(--accent-primary); background: rgba(0, 122, 255, 0.1); }
+        .nav-item.active::after {
+            content: ''; position: absolute; left: -14px; width: 4px; height: 20px;
+            background: var(--accent-primary); border-radius: 0 4px 4px 0;
+            box-shadow: 0 0 10px var(--accent-primary);
+        }
+        .nav-tooltip {
+            position: absolute; left: 60px; background: #FFF; color: #000;
+            padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+            white-space: nowrap; opacity: 0; pointer-events: none; transition: 0.2s;
+            transform: translateX(-10px);
+        }
+        .nav-item:hover .nav-tooltip { opacity: 1; transform: translateX(0); }
+
+        /* ─── MAIN CONTENT ──────────────────────────────────────────────────── */
+        main#main-viewport {
+            flex: 1;
+            padding: 24px 32px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* ─── TOP BAR ───────────────────────────────────────────────────────── */
+        header#top-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 32px;
+        }
+        .header-title h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+        .header-title p { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+        
+        .header-actions { display: flex; align-items: center; gap: 16px; }
+        .status-badge {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 16px; border-radius: 20px;
+            background: rgba(0, 255, 171, 0.05); border: 1px solid rgba(0, 255, 171, 0.1);
+            font-size: 12px; font-weight: 600; color: var(--accent-emerald);
+        }
+        .status-badge.err { background: rgba(255, 45, 85, 0.05); border-color: rgba(255, 45, 85, 0.1); color: var(--accent-crimson); }
+        .status-dot { width: 8px; height: 8px; background: currentColor; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.8); } 100% { opacity: 1; transform: scale(1); } }
+
+        /* ─── GLASS CARDS ───────────────────────────────────────────────────── */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s;
+        }
+        .glass-card:hover { border-color: rgba(255,255,255,0.15); }
+
+        /* ─── KPI GRID ──────────────────────────────────────────────────────── */
+        .kpi-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+            margin-bottom: 32px;
+        }
+        .kpi-card { position: relative; overflow: hidden; }
+        .kpi-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .kpi-value { font-size: 32px; font-weight: 700; font-family: var(--font-mono); line-height: 1; }
+        .kpi-trend { font-size: 12px; margin-top: 8px; display: flex; align-items: center; gap: 4px; }
+        .trend-up { color: var(--accent-crimson); }
+        .trend-down { color: var(--accent-emerald); }
+
+        /* ─── MAIN DASHBOARD GRID ───────────────────────────────────────────── */
+        .dash-grid {
+            display: grid; grid-template-columns: 2fr 1fr; gap: 24px;
+        }
+
+        /* ─── TAB CONTENT ───────────────────────────────────────────────────── */
+        .view-pane { display: none; animation: fadeIn 0.4s ease-out; }
+        .view-pane.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ─── COMPONENT UI ──────────────────────────────────────────────────── */
+        .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .section-header h2 { font-size: 14px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+
+        .btn-action {
+            background: var(--accent-primary); color: #FFF; border: none;
+            padding: 8px 16px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: 0.2s;
+        }
+        .btn-action:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-outline { background: transparent; border: 1px solid var(--glass-border); color: var(--text-main); }
+        .btn-outline:hover { background: rgba(255,255,255,0.05); }
+
+        /* ─── SERVICE CARDS ─────────────────────────────────────────────────── */
+        .svc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .svc-card { padding: 20px; position: relative; }
+        .svc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+        .svc-info h3 { font-size: 15px; font-weight: 700; }
+        .svc-info p { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
+        
+        .svc-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat-box { background: rgba(255,255,255,0.03); padding: 12px; border-radius: var(--radius-sm); }
+        .stat-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+        .stat-value { font-size: 16px; font-weight: 700; font-family: var(--font-mono); }
+
+        /* ─── ANOMALY FEED ──────────────────────────────────────────────────── */
+        .feed-container { display: flex; flex-direction: column; gap: 12px; max-height: 600px; overflow-y: auto; padding-right: 8px; }
+        .anomaly-item {
+            display: flex; gap: 16px; padding: 16px; background: rgba(255,255,255,0.02);
+            border-radius: var(--radius-md); border-left: 4px solid var(--accent-primary);
+            transition: 0.2s;
+        }
+        .anomaly-item:hover { background: rgba(255,255,255,0.04); }
+        .anomaly-item.critical { border-left-color: var(--accent-crimson); }
+        .anomaly-item.warning { border-left-color: var(--accent-amber); }
+        
+        .anom-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+        .anom-icon.critical { background: rgba(255, 45, 85, 0.1); }
+        .anom-icon.warning { background: rgba(255, 179, 0, 0.1); }
+        
+        .anom-content { flex: 1; }
+        .anom-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .anom-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+        .anom-time { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+        .anom-desc { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+
+        /* ─── LOGS VIEW ─────────────────────────────────────────────────────── */
+        .log-terminal {
+            background: #000; border-radius: var(--radius-md); font-family: var(--font-mono);
+            font-size: 12px; padding: 20px; height: 500px; overflow-y: auto;
+            border: 1px solid var(--glass-border); line-height: 1.6;
+        }
+        .log-entry { margin-bottom: 4px; display: flex; gap: 12px; }
+        .log-timestamp { color: var(--text-muted); flex-shrink: 0; }
+        .log-level { width: 50px; font-weight: 600; text-align: center; border-radius: 4px; font-size: 10px; }
+        .lvl-info { background: rgba(0, 122, 255, 0.1); color: var(--accent-primary); }
+        .lvl-error { background: rgba(255, 45, 85, 0.1); color: var(--accent-crimson); }
+
+        /* ─── UI DECORATION ─────────────────────────────────────────────────── */
+        .glow-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; opacity: 0.1;
+            background: linear-gradient(180deg, var(--accent-primary) 0%, transparent 100%);
+            mask-image: radial-gradient(circle, #000 0%, transparent 70%);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside id="sidebar">
+        <div class="nav-logo">SA</div>
+        
+        <div class="nav-item active" onclick="showView('overview', this)" title="Command Overview">
+            <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+            <span class="nav-tooltip">Command Overview</span>
+        </div>
+        
+        <div class="nav-item" onclick="showView('services', this)" title="Service Mesh">
+            <svg viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+            <span class="nav-tooltip">Service Mesh</span>
+        </div>
+        
+        <div class="nav-item" onclick="showView('anomalies', this)" title="Anomalies Feed">
+            <svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
+            <span class="nav-tooltip">Anomalies Feed</span>
+        </div>
+        
+        <div class="nav-item" onclick="showView('rca', this)" title="Root Cause Analysis">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            <span class="nav-tooltip">Root Cause Radar</span>
+        </div>
+        
+        <div class="nav-item" onclick="showView('logs', this)" title="Systems Logs">
+            <svg viewBox="0 0 24 24"><path d="M4 14h4v-4H4v4zm0 5h4v-4H4v4zM4 9h4V5H4v4zm5 5h12v-4H9v4zm0 5h12v-4H9v4zM9 5v4h12V5H9z"/></svg>
+            <span class="nav-tooltip">Live Intelligence Logs</span>
+        </div>
+        
+        <div class="nav-item" onclick="showView('simulate', this)" title="Simulation Chamber" style="margin-top: auto;">
+            <svg viewBox="0 0 24 24"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v4h2v-4h3l-4-4-4 4h3z"/></svg>
+            <span class="nav-tooltip">Simulation Chamber</span>
+        </div>
+    </aside>
+
+    <!-- MAIN VIEWPORT -->
+    <main id="main-viewport">
+        <!-- GLOBAL TOP BAR -->
+        <header id="top-bar">
+            <div class="header-title">
+                <h1 id="view-title">Command Overview</h1>
+                <p id="view-subtitle">Autonomous Incident Resolution • AI Model v2.4 (Active)</p>
+            </div>
+            
+            <div class="header-actions">
+                <div id="ws-badge" class="status-badge">
+                    <div class="status-dot"></div>
+                    <span id="ws-text">ENGINE CONNECTED</span>
+                </div>
+                <div id="sys-clock" style="font-family: var(--font-mono); font-size: 13px; color: var(--text-dim);">00:00:00 UTC</div>
+                <button class="btn-action btn-outline" onclick="refreshCoreData()">↺ Refresh Hub</button>
+            </div>
+        </header>
+
+        <!-- ── VIEW: OVERVIEW ── -->
+        <div id="view-overview" class="view-pane active">
+            <!-- TOP KPIs -->
+            <div class="kpi-grid">
+                <div class="glass-card kpi-card">
+                    <div class="kpi-label">System Health</div>
+                    <div class="kpi-value" id="kpi-health" style="color: var(--accent-emerald);">99.9%</div>
+                    <div class="kpi-trend trend-down">↑ 0.2% optimal</div>
+                </div>
+                <div class="glass-card kpi-card">
+                    <div class="kpi-label">Active Anomalies</div>
+                    <div class="kpi-value" id="kpi-anoms" style="color: var(--accent-crimson);">0</div>
+                    <div class="kpi-trend">Scanning 120 nodes...</div>
+                </div>
+                <div class="glass-card kpi-card">
+                    <div class="kpi-label">Requests / Sec</div>
+                    <div class="kpi-value" id="kpi-rps">0</div>
+                    <div class="kpi-trend">Global throughput</div>
+                </div>
+                <div class="glass-card kpi-card">
+                    <div class="kpi-label">Auto-Resolved</div>
+                    <div class="kpi-value" id="kpi-resolved" style="color: var(--accent-primary);">0</div>
+                    <div class="kpi-trend">ML remediation rate</div>
+                </div>
+            </div>
+
+            <!-- DASHBOARD MAIN GRID -->
+            <div class="dash-grid">
+                <!-- CHART SECTION -->
+                <div class="glass-card">
+                    <div class="section-header">
+                        <h2>Infrastructure Telemetry</h2>
+                        <div class="header-actions" style="gap: 8px;">
+                            <button class="btn-action btn-outline" style="padding: 4px 10px;">CPU</button>
+                            <button class="btn-action btn-outline" style="padding: 4px 10px;">Latency</button>
+                        </div>
+                    </div>
+                    <div style="height: 300px; width: 100%;">
+                        <canvas id="main-telemetry-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- RIGHT PANEL: INCIDENTS -->
+                <div class="glass-card">
+                    <div class="section-header">
+                        <h2>Critical Incidents</h2>
+                    </div>
+                    <div class="feed-container" id="incident-feed-mini">
+                        <!-- Incremental Items -->
+                        <div style="color: var(--text-muted); text-align: center; padding: 40px 0; font-size: 12px;">
+                            No active incidents detected. Hub is quiet.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── VIEW: SERVICES ── -->
+        <div id="view-services" class="view-pane">
+            <div class="section-header">
+                <h2>Service Mesh Infrastructure</h2>
+            </div>
+            <div class="svc-grid" id="svc-mesh-grid">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- ── VIEW: ANOMALIES ── -->
+        <div id="view-anomalies" class="view-pane">
+            <div class="section-header">
+                <h2>Live Anomaly Intelligence Feed</h2>
+                <button class="btn-action" onclick="simulateAnomalyFromUI()">+ Force Anomaly</button>
+            </div>
+            <div class="feed-container" id="anomaly-full-feed">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- ── VIEW: LOGS ── -->
+        <div id="view-logs" class="view-pane">
+            <div class="section-header">
+                <h2>System Intelligence Logs</h2>
+                <div class="header-actions">
+                    <select id="log-svc-filter" class="btn-action btn-outline" style="appearance: none; padding-right: 30px;">
+                        <option value="all">All Channels</option>
+                        <option value="user_service">User Service</option>
+                        <option value="order_service">Order Service</option>
+                        <option value="payment_service">Payment Service</option>
+                    </select>
+                    <button class="btn-action btn-outline" onclick="clearLogTerminal()">Clear Buffer</button>
+                </div>
+            </div>
+            <div class="log-terminal" id="log-terminal-output">
+                <!-- Log entries here -->
+            </div>
+        </div>
+
+        <!-- ── VIEW: RCA ── -->
+        <div id="view-rca" class="view-pane">
+            <div class="section-header">
+                <h2>Root Cause Radar & Auto-Remediation</h2>
+            </div>
+            <div class="dash-grid">
+                <div class="glass-card" id="rca-cards-wrap">
+                    <div style="color: var(--text-muted); text-align: center; padding: 60px 0;">
+                        Radar scanning cluster... No incidents in active buffer.
+                    </div>
+                </div>
+                <div class="glass-card">
+                    <div class="section-header"><h2>Remediation History</h2></div>
+                    <div id="rem-queue-mini" class="feed-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── VIEW: SIMULATE ── -->
+        <div id="view-simulate" class="view-pane">
+            <div class="section-header">
+                <h2>Simulation Chamber</h2>
+                <p style="color: var(--accent-amber); font-size: 11px;">⚠ EXPERIMENTAL: Real Chaos Hazards</p>
+            </div>
+            <div class="svc-grid">
+                <div class="glass-card svc-card" onclick="simulateAnomalyFromUI()">
+                    <h3>Stress Test: CPU</h3>
+                    <p>Increases CPU load to 95% on primary services.</p>
+                </div>
+                <div class="glass-card svc-card" onclick="fetch(`${ENGINE_URL}/api/simulate/crash/payment_service`,{method:'POST'})">
+                    <h3>Hard Shutdown</h3>
+                    <p>Forcefully kills Payment Service containers.</p>
+                </div>
+                <div class="glass-card svc-card" onclick="fetch(`${ENGINE_URL}/api/simulate/mem_leak/user_service`,{method:'POST'})">
+                    <h3>Memory Saturation</h3>
+                    <p>Simulates a linear memory leak in User Service.</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // ─── CONFIGURATION ───────────────
+        const ENGINE_HOST = location.hostname || 'localhost';
+        const ENGINE_URL  = `http://${ENGINE_HOST}:9000`;
+        const ENGINE_WS   = `ws://${ENGINE_HOST}:9000/ws`;
+
+        const STATE = {
+            ws: null,
+            connected: false,
+            metrics: {},
+            anomalies: [],
+            incidents: [],
+            remediations: [],
+            resolvedCount: 0,
+            activeView: 'overview'
+        };
+
+        const CHARTS = {};
+
+        // ─── UTILS ───────────────────────
+        const $ = id => document.getElementById(id);
+        const shortTs = () => new Date().toLocaleTimeString();
+
+        // ─── NAVIGATION ──────────────────
+        function showView(viewId, el) {
+            const view = $(`view-${viewId}`);
+            if (!view) {
+                console.warn(`View ${viewId} not found`);
+                return;
+            }
+
+            document.querySelectorAll('.view-pane').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            view.classList.add('active');
+            el.classList.add('active');
+            
+            $('view-title').textContent = el.getAttribute('title') || viewId;
+            STATE.activeView = viewId;
+        }
+
+        function refreshCoreData() {
+            addTerminalLog('HUB', 'INFO', 'Manual telemetry refresh initiated...');
+            if (STATE.connected && STATE.metrics) {
+                updateMetrics(STATE.metrics);
+                addTerminalLog('HUB', 'SUCCESS', 'Buffer synchronized with engine.');
+            } else {
+                addTerminalLog('HUB', 'WARN', 'Engine unreachable. Using cached metrics.');
+            }
+        }
+
+        // ─── WEBSOCKET ───────────────────
+        function initWebSocket() {
+            STATE.ws = new WebSocket(ENGINE_WS);
+            STATE.ws.onopen = () => {
+                STATE.connected = true;
+                $('ws-badge').classList.remove('err');
+                $('ws-text').textContent = 'ENGINE CONNECTED';
+                addTerminalLog('HUB', 'INFO', 'Secure WebSocket connection established with SmartOps AI Engine.');
+            };
+            STATE.ws.onmessage = e => {
+                const data = JSON.parse(e.data);
+                handleEngineUpdate(data);
+            };
+            STATE.ws.onclose = () => {
+                STATE.connected = false;
+                $('ws-badge').classList.add('err');
+                $('ws-text').textContent = 'ENGINE DISCONNECTED';
+                setTimeout(initWebSocket, 5000);
+            };
+        }
+
+        function handleEngineUpdate(data) {
+            if (data.type === 'metrics_update' || data.type === 'init') {
+                if (data.metrics) updateMetrics(data.metrics);
+                if (data.anomalies) data.anomalies.forEach(a => addAnomaly(a));
+                if (data.rcas) data.rcas.forEach(r => addIncident(r));
+                if (data.remediations) updateRemediations(data.remediations);
+            }
+        }
+
+        function updateMetrics(metrics) {
+            STATE.metrics = metrics;
+            const values = Object.values(metrics);
+            if (!values.length) return;
+
+            const avgRps = values.reduce((sum, s) => sum + s.rps, 0);
+            const avgCpu = (values.reduce((sum, s) => sum + s.cpu, 0) / values.length).toFixed(1);
+
+            $('kpi-rps').textContent = Math.round(avgRps);
+            
+            // Update Services View
+            const grid = $('svc-mesh-grid');
+            if (STATE.activeView === 'services') {
+                grid.innerHTML = '';
+                Object.entries(metrics).forEach(([key, m]) => {
+                    grid.innerHTML += `
+                        <div class="glass-card svc-card">
+                            <div class="svc-header">
+                                <div class="svc-info">
+                                    <h3>${key.replace('_', ' ').toUpperCase()}</h3>
+                                    <p>${m.pods_ready || 'Unknown'}</p>
+                                </div>
+                                <div class="status-dot" style="color: ${m.cpu > 70 ? 'var(--accent-amber)' : 'var(--accent-emerald)'}"></div>
+                            </div>
+                            <div class="svc-metrics">
+                                <div class="stat-box">
+                                    <div class="stat-label">CPU Load</div>
+                                    <div class="stat-value">${m.cpu}%</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-label">RPS</div>
+                                    <div class="stat-value">${m.rps}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            // Update Hub Chart
+            updateChartData(avgRps);
+        }
+
+        function addAnomaly(a) {
+            STATE.anomalies.unshift(a);
+            const feed = $('anomaly-full-feed');
+            const miniFeed = $('incident-feed-mini');
+            
+            const html = `
+                <div class="anomaly-item ${a.severity}">
+                    <div class="anom-icon ${a.severity}">${a.severity === 'critical' ? '⚡' : '⚠'}</div>
+                    <div class="anom-content">
+                        <div class="anom-header">
+                            <div class="anom-title">${a.metric.toUpperCase()} SPIKE DETECTED</div>
+                            <div class="anom-time">${shortTs()}</div>
+                        </div>
+                        <div class="anom-desc">${a.service.replace('_',' ')} exceeds threshold: ${a.value} recorded (Limit: ${a.threshold})</div>
+                    </div>
+                </div>
+            `;
+            
+            if (feed) feed.insertAdjacentHTML('afterbegin', html);
+            if (miniFeed && a.severity === 'critical') {
+                 if (miniFeed.innerHTML.includes('quiet')) miniFeed.innerHTML = '';
+                 miniFeed.insertAdjacentHTML('afterbegin', html);
+            }
+            
+            $('kpi-anoms').textContent = STATE.anomalies.filter(x => x.severity === 'critical').length;
+        }
+
+        function addIncident(r) {
+            STATE.incidents.unshift(r);
+            if (STATE.incidents.length > 10) STATE.incidents.pop();
+            
+            addTerminalLog('AI-RCA', 'INFO', `Incident Analyzed: ${r.incident_id}. Primary Cause: ${r.primary_cause}. Confidence: ${Math.round(r.causes[0].probability*100)}%`);
+            renderRCACards();
+        }
+
+        function renderRCACards() {
+            const wrap = $('rca-cards-wrap');
+            if (!wrap) return;
+            
+            if (!STATE.incidents.length) {
+                wrap.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 60px 0;">Radar scanning cluster... No incidents in active buffer.</div>';
+                return;
+            }
+
+            wrap.innerHTML = STATE.incidents.map(r => `
+                <div class="glass-card" style="margin-bottom: 16px; border-left: 4px solid var(--accent-primary);">
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 12px;">
+                        <span style="font-size: 13px; font-weight: 700; color: var(--accent-secondary);">${r.incident_id}</span>
+                        <span class="anom-time">${r.analyzed_at || shortTs()}</span>
+                    </div>
+                    <div style="font-size: 15px; font-weight: 700; margin-bottom: 8px;">${r.primary_cause}</div>
+                    <p style="font-size: 12px; color: var(--text-dim); line-height: 1.6; margin-bottom: 12px;">${r.ai_summary || 'Automatic ML-driven diagnostic completed for ' + r.service}</p>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                        ${(r.causes || []).slice(0, 4).map(c => `
+                            <div style="background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px;">
+                                <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">${c.cause}</div>
+                                <div style="font-size: 12px; font-weight: 700; color: ${c.probability > 0.7 ? 'var(--accent-crimson)' : 'var(--text-main)'}">${Math.round(c.probability * 100)}%</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateRemediations(remeds) {
+            STATE.remediations = [...remeds, ...STATE.remediations].slice(0, 10);
+            STATE.resolvedCount = STATE.remediations.filter(r => r.status === 'completed').length;
+            $('kpi-resolved').textContent = STATE.resolvedCount;
+            renderRemediationHistory();
+        }
+
+        function renderRemediationHistory() {
+            const wrap = $('rem-queue-mini');
+            if (!wrap) return;
+            
+            if (!STATE.remediations.length) {
+                wrap.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 40px 0;">No remediation history.</div>';
+                return;
+            }
+
+            wrap.innerHTML = STATE.remediations.map(r => `
+                <div class="anomaly-item" style="border-left-color: var(--accent-emerald); background: rgba(0, 255, 171, 0.03);">
+                    <div class="anom-icon" style="background: rgba(0, 255, 171, 0.1); color: var(--accent-emerald);">✓</div>
+                    <div class="anom-content">
+                        <div class="anom-header">
+                            <div class="anom-title">${r.title.toUpperCase()}</div>
+                            <div class="anom-time">${shortTs()}</div>
+                        </div>
+                        <div class="anom-desc" style="font-family: var(--font-mono); font-size: 10px;">${r.command || 'Auto-remediation success'}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ─── TERMINAL LOGS ────────────────
+        function addTerminalLog(svc, lvl, msg) {
+            const term = $('log-terminal-output');
+            if (!term) return;
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="log-timestamp">${shortTs()}</span>
+                <span class="log-level lvl-${lvl.toLowerCase()}">${lvl}</span>
+                <span style="color: var(--accent-secondary); width: 80px;">[${svc}]</span>
+                <span class="log-msg">${msg}</span>
+            `;
+            term.appendChild(entry);
+            term.scrollTop = term.scrollHeight;
+            if (term.childNodes.length > 100) term.removeChild(term.firstChild);
+        }
+
+        function clearLogTerminal() {
+            const term = $('log-terminal-output');
+            if (term) term.innerHTML = '';
+            addTerminalLog('HUB', 'INFO', 'Log terminal buffer cleared.');
+        }
+
+        // ─── CHARTS ───────────────────────
+        function initCharts() {
+            const ctx = $('main-telemetry-chart').getContext('2d');
+            CHARTS.main = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(60).fill(''),
+                    datasets: [{
+                        label: 'Global Throughput',
+                        data: Array(60).fill(0),
+                        borderColor: '#00ffa3',
+                        backgroundColor: 'rgba(0, 255, 163, 0.05)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 450 },
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { 
+                            min: 0,
+                            grid: { color: 'rgba(255,255,255,0.03)' },
+                            ticks: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChartData(val) {
+            if (!CHARTS.main) return;
+            const data = CHARTS.main.data.datasets[0].data;
+            data.push(val);
+            if (data.length > 60) data.shift();
+            CHARTS.main.update('none');
+        }
+
+        // ─── INIT ─────────────────────────
+        window.onload = () => {
+            initCharts();
+            initWebSocket();
+            
+            // Clock
+            setInterval(() => {
+                $('sys-clock').textContent = new Date().toISOString().slice(11, 19) + ' UTC';
+            }, 1000);
+            
+            // Periodic Data Polish
+            setInterval(() => {
+                if (STATE.connected) {
+                    addTerminalLog('HUB', 'INFO', 'Buffer synchronized with engine telemetry.');
+                }
+            }, 15000);
+        };
+
+        function simulateAnomalyFromUI() {
+             fetch(`${ENGINE_URL}/api/simulate/cpu_stress/order_service`, {method:'POST'});
+             addTerminalLog('OPERATOR', 'WARN', 'Manual anomaly injection triggered: order_service.cpu_stress');
+        }
+    </script>
+</body>
+</html>

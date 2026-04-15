@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+rule_files:
+  - "alerts.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+scrape_configs:
+
+  - job_name: 'user_service'
+    static_configs:
+      - targets: ['user_service:8000']
+    metrics_path: /metrics
+
+  - job_name: 'order_service'
+    static_configs:
+      - targets: ['order_service:8000']
+    metrics_path: /metrics
+
+  - job_name: 'payment_service'
+    static_configs:
+      - targets: ['payment_service:8000']
+    metrics_path: /metrics
+
+  - job_name: 'smartops_engine'
+    static_configs:
+      - targets: ['smartops_engine:9000']
+    metrics_path: /metrics
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

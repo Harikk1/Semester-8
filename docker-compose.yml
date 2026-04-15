@@ -1,0 +1,136 @@
+version: '3.8'
+
+networks:
+  smartops-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  prometheus-data:
+
+services:
+
+  # ─── Database ───────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: smartops-db
+    networks: [smartops-net]
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: orders_db
+    ports: ["5433:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./microservices-lab/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d orders_db"]
+      interval: 5s
+      retries: 5
+
+  # ─── Cache ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: smartops-redis
+    networks: [smartops-net]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+
+  # ─── Payment Service ─────────────────────────────────────────
+  payment_service:
+    build: ./microservices-lab/payment_service
+    container_name: smartops-payment
+    networks: [smartops-net]
+    ports: ["8002:8000"]
+    environment:
+      FAILURE_RATE: "0.05"
+      MAX_LATENCY: "0.3"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 15s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ─── Order Service ───────────────────────────────────────────
+  order_service:
+    build: ./microservices-lab/order_service
+    container_name: smartops-order
+    networks: [smartops-net]
+    ports: ["8001:8000"]
+    environment:
+      DATABASE_URL: postgresql://user:password@db/orders_db
+      PAYMENT_SERVICE_URL: http://payment_service:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      payment_service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 15s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ─── User Service ────────────────────────────────────────────
+  user_service:
+    build: ./microservices-lab/user_service
+    container_name: smartops-user
+    networks: [smartops-net]
+    ports: ["8000:8000"]
+    environment:
+      REDIS_HOST: redis
+      ORDER_SERVICE_URL: http://order_service:8000
+    depends_on:
+      redis:
+        condition: service_healthy
+      order_service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")' || exit 1"]
+      interval: 15s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ─── SmartOps AI Engine ──────────────────────────────────────
+  smartops_engine:
+    build: ./smartops_engine
+    container_name: smartops-engine
+    networks: [smartops-net]
+    ports: ["9000:9000"]
+    environment:
+      USER_SERVICE_URL: http://user_service:8000
+      ORDER_SERVICE_URL: http://order_service:8000
+      PAYMENT_SERVICE_URL: http://payment_service:8000
+      PROMETHEUS_URL: http://prometheus:9090
+    depends_on:
+      - user_service
+      - order_service
+      - payment_service
+    restart: unless-stopped
+
+  # ─── Prometheus ──────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: smartops-prometheus
+    networks: [smartops-net]
+    volumes:
+      - ./microservices-lab/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+    restart: unless-stopped
+
+  # ─── Grafana ─────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: smartops-grafana
+    networks: [smartops-net]
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: smartops123
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+    restart: unless-stopped
