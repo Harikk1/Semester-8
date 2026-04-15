@@ -2,14 +2,16 @@ import os
 import time
 import random
 import logging
+import asyncio
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean
+from sqlalchemy import create_engine, Column, Integer, Float, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from pythonjsonlogger import jsonlogger
+from datetime import datetime
 
 # Logging configuration
 logger = logging.getLogger("order_service")
@@ -28,10 +30,12 @@ Base = declarative_base()
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer)
+    user_id = Column(Integer, index=True)
     amount = Column(Float)
-    status = Column(String, default="pending")
-    paid = Column(Boolean, default=False)
+    status = Column(String, default="pending", index=True)
+    paid = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
@@ -76,44 +80,111 @@ def metrics():
 @app.post("/create")
 async def create_order(order_data: OrderCreate):
     db = SessionLocal()
+    request_id = f"ord-{order_data.user_id}-{random.randint(100, 999)}"
+    
     try:
+        # Create order with validation
+        if order_data.amount <= 0:
+            raise HTTPException(status_code=400, detail="Invalid order amount")
+        
+        if order_data.amount > 10000:
+            raise HTTPException(status_code=400, detail="Order amount exceeds maximum limit")
+        
         order = Order(user_id=order_data.user_id, amount=order_data.amount)
         db.add(order)
         db.commit()
         db.refresh(order)
         
-        # Call Payment Service with Retries and Timeout
-        request_id = f"ord-{order.id}-{random.randint(100, 999)}"
-        logger.info(f"Creating payment for order {order.id}", extra={"request_id": request_id})
+        logger.info(f"Order {order.id} created for user {order_data.user_id}, amount ${order.amount}", 
+                   extra={"request_id": request_id})
         
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        # Enhanced Payment Service call with circuit breaker pattern
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
             retries = 3
             payment_status = False
+            last_error = None
+            
             for attempt in range(retries):
                 try:
+                    logger.info(f"Payment attempt {attempt+1}/{retries} for order {order.id}", 
+                              extra={"request_id": request_id})
+                    
                     response = await client.post(
                         f"{PAYMENT_SERVICE_URL}/process",
-                        json={"order_id": order.id, "amount": order.amount, "user_id": order.user_id},
+                        json={
+                            "order_id": order.id, 
+                            "amount": order.amount, 
+                            "user_id": order.user_id
+                        },
                         headers={"X-Request-ID": request_id}
                     )
+                    
                     if response.status_code == 200:
+                        payment_result = response.json()
                         payment_status = True
+                        logger.info(f"Payment successful for order {order.id}: {payment_result.get('payment_id')}", 
+                                  extra={"request_id": request_id})
                         break
+                    elif response.status_code >= 500:
+                        last_error = f"Payment service error: {response.status_code}"
+                        logger.warning(f"Payment attempt {attempt+1} failed with status {response.status_code}", 
+                                     extra={"request_id": request_id})
                     else:
-                        logger.warning(f"Payment attempt {attempt+1} failed with status {response.status_code}", extra={"request_id": request_id})
+                        # 4xx errors - don't retry
+                        last_error = f"Payment rejected: {response.text}"
+                        logger.error(f"Payment rejected for order {order.id}: {response.text}", 
+                                   extra={"request_id": request_id})
+                        break
+                        
+                except httpx.TimeoutException as e:
+                    last_error = f"Payment service timeout: {str(e)}"
+                    logger.error(f"Payment attempt {attempt+1} timed out", 
+                               extra={"request_id": request_id, "error": str(e)})
+                    
+                except httpx.ConnectError as e:
+                    last_error = f"Payment service unreachable: {str(e)}"
+                    logger.error(f"Payment attempt {attempt+1} connection failed", 
+                               extra={"request_id": request_id, "error": str(e)})
+                    
                 except Exception as e:
-                    logger.error(f"Payment attempt {attempt+1} failed with error {str(e)}", extra={"request_id": request_id})
-                time.sleep(random.uniform(0.1, 0.5))
+                    last_error = f"Payment error: {str(e)}"
+                    logger.exception(f"Payment attempt {attempt+1} unexpected error", 
+                                   extra={"request_id": request_id, "error": str(e)})
+                
+                # Exponential backoff
+                if attempt < retries - 1:
+                    backoff = random.uniform(0.1, 0.3) * (2 ** attempt)
+                    await asyncio.sleep(backoff)
 
+        # Update order status based on payment result
         if payment_status:
             order.status = "completed"
             order.paid = True
             db.commit()
-            return {"id": order.id, "status": "paid", "amount": order.amount}
+            logger.info(f"Order {order.id} completed successfully", extra={"request_id": request_id})
+            return {
+                "id": order.id, 
+                "status": "paid", 
+                "amount": order.amount,
+                "user_id": order.user_id,
+                "created_at": order.created_at.isoformat()
+            }
         else:
             order.status = "failed"
             db.commit()
-            raise HTTPException(status_code=500, detail="Payment processing failed after retries")
+            logger.error(f"Order {order.id} failed after {retries} payment attempts: {last_error}", 
+                       extra={"request_id": request_id})
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Payment processing failed: {last_error}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Order creation failed", extra={"request_id": request_id, "error": str(e)})
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Order creation error: {str(e)}")
     finally:
         db.close()
 

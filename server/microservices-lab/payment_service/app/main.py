@@ -70,12 +70,44 @@ def metrics():
 
 @app.post("/process")
 def process_payment(payment: PaymentRequest):
-    logger.info(f"Processing payment for order {payment.order_id}", extra={"request_id": "TBD"})
-    # Dummy processing
-    if payment.amount <= 0:
-        raise HTTPException(status_code=400, detail="Invalid payment amount")
+    request_id = f"pay-{payment.order_id}-{random.randint(1000, 9999)}"
     
-    return {"status": "success", "payment_id": random.randint(10000, 99999)}
+    logger.info(f"Processing payment for order {payment.order_id}, amount ${payment.amount}", 
+               extra={"request_id": request_id, "user_id": payment.user_id})
+    
+    # Enhanced validation
+    if payment.amount <= 0:
+        logger.error(f"Invalid payment amount: {payment.amount}", extra={"request_id": request_id})
+        ERROR_COUNT.labels(type="validation_error").inc()
+        raise HTTPException(status_code=400, detail="Invalid payment amount: must be positive")
+    
+    if payment.amount > 10000:
+        logger.warning(f"Large payment amount flagged: ${payment.amount}", extra={"request_id": request_id})
+        ERROR_COUNT.labels(type="large_amount").inc()
+        raise HTTPException(status_code=400, detail="Payment amount exceeds maximum limit of $10,000")
+    
+    if payment.user_id <= 0:
+        logger.error(f"Invalid user_id: {payment.user_id}", extra={"request_id": request_id})
+        ERROR_COUNT.labels(type="validation_error").inc()
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+    
+    # Simulate payment processing with realistic behavior
+    processing_time = random.uniform(0.05, 0.2)  # 50-200ms realistic processing
+    time.sleep(processing_time)
+    
+    # Generate payment ID with better format
+    payment_id = int(time.time() * 1000) % 1000000 + random.randint(100000, 999999)
+    
+    logger.info(f"Payment processed successfully: payment_id={payment_id}, order_id={payment.order_id}", 
+               extra={"request_id": request_id, "processing_time": processing_time})
+    
+    return {
+        "status": "success", 
+        "payment_id": payment_id,
+        "order_id": payment.order_id,
+        "amount": payment.amount,
+        "processed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
 
 @app.get("/simulate/crash")
 def simulate_crash():

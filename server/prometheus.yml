@@ -1,6 +1,7 @@
 global:
   scrape_interval: 5s
   evaluation_interval: 5s
+  scrape_timeout: 4s
 
 rule_files:
   - "alerts.yml"
@@ -16,22 +17,27 @@ scrape_configs:
     static_configs:
       - targets: ['user_service:8000']
     metrics_path: /metrics
+    scrape_interval: 5s
 
   - job_name: 'order_service'
     static_configs:
       - targets: ['order_service:8000']
     metrics_path: /metrics
+    scrape_interval: 5s
 
   - job_name: 'payment_service'
     static_configs:
       - targets: ['payment_service:8000']
     metrics_path: /metrics
+    scrape_interval: 5s
 
   - job_name: 'smartops_engine'
     static_configs:
       - targets: ['smartops_engine:9000']
     metrics_path: /metrics
+    scrape_interval: 10s
 
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+    scrape_interval: 15s
