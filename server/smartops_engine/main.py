@@ -173,7 +173,7 @@ class AnomalyDetector:
             if val >= thresholds["critical"]:
                 severity = "critical"
             elif val >= thresholds["warn"]:
-                severity = "warning"
+                severity = "warn"
             if severity:
                 anomalies.append({
                     "id": hashlib.md5(f"{svc}{metric}{now_iso()}".encode()).hexdigest()[:12],

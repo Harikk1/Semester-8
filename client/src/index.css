@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --theme-transition: all 0.5s cubic-bezier(0.2, 0, 0, 1);
+    
+    --accent-primary: #3b82f6;
+    --accent-success: #10b981;
+    --accent-error: #ef4444;
+
+    /* Mode: Noir */
+    --bg-app: #000000;
+    --bg-sidebar: #0f172a; 
+    --bg-surface: #0a0a0a;
+    --bg-element: #111111;
+    --border-subtle: rgba(255, 255, 255, 0.04);
+    
+    --text-high: #ffffff;
+    --text-mid: #94a3b8;
+    --text-low: #475569;
+    --text-sidebar: #cbd5e1; /* Light Slate for sidebar */
+    
+    --font-main: 'Inter', system-ui, sans-serif;
+}
+
+[data-theme='light'] {
+    --bg-app: #ffffff;
+    --bg-sidebar: #0f172a; /* Permanent Dark Blue */
+    --bg-surface: #fafafa;
+    --bg-element: #f4f4f5;
+    --border-subtle: rgba(0, 0, 0, 0.04);
+    
+    --text-high: #0f172a;
+    --text-mid: #64748b;
+    --text-low: #94a3b8;
+    --text-sidebar: #cbd5e1; 
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+}
+
+body {
+    background: var(--bg-app);
+    color: var(--text-high);
+    font-family: var(--font-main);
+    overflow: hidden;
+    height: 100vh;
+    transition: var(--theme-transition);
+}
+
+#root {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* ─── SCROLLBAR ─────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { 
+    background: rgba(255,255,255,0.1); 
+    border-radius: 10px; 
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* ─── GLOBALS ───────────────────── */
+.glass-panel {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    transition: var(--theme-transition);
+}
+
+.modern-shadow {
+    box-shadow: var(--shadow-main);
+}
+
+.btn-icon {
+    background: transparent;
+    border: none;
+    color: var(--text-low);
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--theme-transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:hover {
+    color: var(--text-high);
+}
+
+.btn-icon.active {
+    background: rgba(0, 255, 163, 0.1);
+    border-color: rgba(0, 255, 163, 0.3);
+    color: var(--accent-emerald);
+}
